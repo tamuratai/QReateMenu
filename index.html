@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QreateMenu - Menu QR Generator 20260209A</title>
+<title>QreateMenu - Menu QR Generator</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
@@ -61,7 +61,7 @@
 
 <body>
 <div class="container">
-    <h2>Menu QR Generator 20260209A</h2>
+    <h2>Menu QR Generator 20260209B</h2>
 
     <span class="settings-toggle" onclick="toggleSettings()">▼ プリンタ設定を表示/非表示</span>
     <div id="settings_area" class="settings-area">
@@ -118,38 +118,12 @@
 <script type="text/javascript">
     // --- 初期化処理 ---
     window.onload = function() {
-        // 保存データの復元
-        restoreFormData();
-
-        // 初回のハッシュチェック (もしリロードされた場合用)
-        checkHashResult();
-        
-        // 数値計算の復元
+        restoreFormData(); // バックグラウンドでリロードされた場合のために復元
         calculatePreview();
     };
 
-    // ハッシュ変更イベントの監視 (ページ遷移せずに戻ってきた場合用)
-    window.addEventListener('hashchange', checkHashResult);
-
-    // --- 結果判定ロジック (ハッシュベース) ---
-    function checkHashResult() {
-        const hash = window.location.hash;
-        if (hash === '#result_success') {
-            // 少し遅延させて確実にポップアップを出す
-            setTimeout(() => { 
-                alert("【印刷成功】\nデータ送信が完了しました。");
-                // 履歴をクリアして、リロードしても再度ポップアップが出ないようにする
-                history.replaceState(null, null, ' '); 
-            }, 100);
-        } else if (hash === '#result_fail') {
-            setTimeout(() => { 
-                alert("【印刷失敗】\nエラーが発生しました。");
-                history.replaceState(null, null, ' '); 
-            }, 100);
-        }
-    }
-
     // --- フォームデータの保存・復元 ---
+    // ※アプリ連携時にバックグラウンドのタブがOSによってメモリ解放されるリスクへの対策
     function saveFormData() {
         const data = {
             store_code: document.getElementById('store_code').value,
@@ -373,10 +347,15 @@
         const text2 = document.getElementById("price_display").value;
         const qrCodeData = currentDisplayString; 
 
-        // ★修正点：? ではなく # を使用してリロードを防ぐ
-        const baseUrl = window.location.href.split('#')[0].split('?')[0];
-        const successURL = encodeURIComponent(baseUrl + '#result_success');
-        const failureURL = encodeURIComponent(baseUrl + '#result_fail');
+        // ★修正点: コールバック先を別ファイル(result.html)にする
+        // index.html と同じ階層にある result.html を絶対URLで指定
+        const currentUrl = window.location.href;
+        // index.htmlを取り除く、またはフォルダ末尾のスラッシュを考慮して result.html を結合
+        const baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1);
+        const resultPage = baseUrl + 'result.html';
+
+        const successURL = encodeURIComponent(resultPage + '?status=success');
+        const failureURL = encodeURIComponent(resultPage + '?status=fail');
 
         const url = scheme + '?' +
             'filename=' + encodeURIComponent(filename) + '&' +

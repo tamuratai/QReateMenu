@@ -1,0 +1,77 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Printing Result</title>
+<style>
+    body {
+        font-family: sans-serif;
+        text-align: center;
+        padding: 40px 20px;
+        background-color: #f4f4f4;
+    }
+    .card {
+        background: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        display: inline-block;
+        max-width: 400px;
+        width: 100%;
+    }
+    h2 { margin-top: 0; }
+    .success { color: #28a745; }
+    .fail { color: #dc3545; }
+    p { color: #666; margin-bottom: 30px; }
+    button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+        width: 100%;
+    }
+</style>
+</head>
+<body>
+    <div class="card">
+        <h2 id="title">Print Request Sent</h2>
+        <p id="desc">処理が完了しました。</p>
+        <button onclick="closeMe()">このタブを閉じる</button>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // パラメータ判定
+            const urlParams = new URLSearchParams(window.location.search);
+            const status = urlParams.get('status');
+            const titleEl = document.getElementById('title');
+            const descEl = document.getElementById('desc');
+
+            if (status === 'success') {
+                titleEl.innerText = "印刷リクエスト成功";
+                titleEl.className = "success";
+                descEl.innerText = "データ送信が完了しました。\n元のタブに戻って操作を続けてください。";
+            } else if (status === 'fail') {
+                titleEl.innerText = "印刷リクエスト失敗";
+                titleEl.className = "fail";
+                descEl.innerText = "エラーが発生しました。\n元のタブに戻って確認してください。";
+            }
+
+            // 自動クローズを試みる
+            // ※ブラウザのセキュリティ制限により、スクリプトで開いていないタブは閉じられないことが多いですが、一応実行します。
+            setTimeout(function() {
+                window.close();
+            }, 500);
+        };
+
+        function closeMe() {
+            window.close();
+            // window.closeが効かない場合のフォールバック（画面にメッセージを残すしかない）
+        }
+    </script>
+</body>
+</html>
