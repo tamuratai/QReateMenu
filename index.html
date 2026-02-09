@@ -53,10 +53,7 @@
         font-size: 14px; 
         border-radius: 4px;
     }
-    #result_message { margin-top: 15px; font-weight: bold; text-align: center; min-height: 24px; }
-    .success { color: green; }
-    .error { color: red; }
-
+    
     .settings-area { display: none; background: #fff3cd; padding: 10px; margin-bottom: 10px; border: 1px solid #ffeeba; }
     .settings-toggle { font-size: 12px; color: #856404; cursor: pointer; text-decoration: underline; margin-bottom: 10px; display: inline-block; }
 </style>
@@ -116,32 +113,43 @@
     
     <label style="font-size:12px; font-weight:bold; margin-top:10px; display:block;">生成データ (48byte):</label>
     <div id="generated_string">データ未生成</div>
-    
-    <div id="result_message"></div>
 </div>
 
 <script type="text/javascript">
-    // --- ページ読み込み時 ---
+    // --- 初期化処理 ---
     window.onload = function() {
-        // 1. 保存されたデータがあれば復元
+        // 保存データの復元
         restoreFormData();
 
-        // 2. 結果パラメータの確認
-        const urlParams = new URLSearchParams(window.location.search);
-        const result = urlParams.get('result');
-        if (result === 'success') showResult('印刷リクエスト送信成功', true);
-        else if (result === 'fail') showResult('印刷リクエスト送信失敗', false);
-
-        // 3. 復元した値に基づいて再計算・QR再表示（任意）
+        // 初回のハッシュチェック (もしリロードされた場合用)
+        checkHashResult();
+        
+        // 数値計算の復元
         calculatePreview();
-        // データが十分にあれば自動でQR生成まで行っても良いが、
-        // ここでは誤操作防止のため数値計算のみにとどめます。
-        if(document.getElementById('item_name').value && document.getElementById('price_ex_tax').value){
-             // 必要であればここで generateMenuData() を呼ぶことも可能
-        }
     };
 
-    // --- フォームデータの保存・復元ロジック ---
+    // ハッシュ変更イベントの監視 (ページ遷移せずに戻ってきた場合用)
+    window.addEventListener('hashchange', checkHashResult);
+
+    // --- 結果判定ロジック (ハッシュベース) ---
+    function checkHashResult() {
+        const hash = window.location.hash;
+        if (hash === '#result_success') {
+            // 少し遅延させて確実にポップアップを出す
+            setTimeout(() => { 
+                alert("【印刷成功】\nデータ送信が完了しました。");
+                // 履歴をクリアして、リロードしても再度ポップアップが出ないようにする
+                history.replaceState(null, null, ' '); 
+            }, 100);
+        } else if (hash === '#result_fail') {
+            setTimeout(() => { 
+                alert("【印刷失敗】\nエラーが発生しました。");
+                history.replaceState(null, null, ' '); 
+            }, 100);
+        }
+    }
+
+    // --- フォームデータの保存・復元 ---
     function saveFormData() {
         const data = {
             store_code: document.getElementById('store_code').value,
@@ -150,7 +158,6 @@
             reduced_tax: document.getElementById('reduced_tax').checked,
             item_name: document.getElementById('item_name').value,
             price_ex_tax: document.getElementById('price_ex_tax').value,
-            // 設定値も保存
             input_printfile: document.getElementById('input_printfile').value,
             input_binfile: document.getElementById('input_binfile').value,
             input_quantity: document.getElementById('input_quantity').value
@@ -169,8 +176,6 @@
                 if(data.reduced_tax !== undefined) document.getElementById('reduced_tax').checked = data.reduced_tax;
                 if(data.item_name) document.getElementById('item_name').value = data.item_name;
                 if(data.price_ex_tax) document.getElementById('price_ex_tax').value = data.price_ex_tax;
-                
-                // 設定値
                 if(data.input_printfile) document.getElementById('input_printfile').value = data.input_printfile;
                 if(data.input_binfile) document.getElementById('input_binfile').value = data.input_binfile;
                 if(data.input_quantity) document.getElementById('input_quantity').value = data.input_quantity;
@@ -180,7 +185,7 @@
         }
     }
 
-    // --- 以下、既存ロジック ---
+    // --- 既存ロジック ---
 
     function toggleSettings() {
         const area = document.getElementById('settings_area');
@@ -203,9 +208,7 @@
     }
 
     function padBytes(byteArray, targetLength, padByteVal, align) {
-        if (byteArray.length >= targetLength) {
-            return byteArray.slice(0, targetLength);
-        }
+        if (byteArray.length >= targetLength) { return byteArray.slice(0, targetLength); }
         const diff = targetLength - byteArray.length;
         const pads = new Array(diff).fill(padByteVal);
         return align === 'right' ? pads.concat(byteArray) : byteArray.concat(pads);
@@ -263,19 +266,15 @@
 
         currentSjisBytes = fullBytes;
         currentDisplayString = bytesToString(fullBytes);
-
         document.getElementById('generated_string').innerText = currentDisplayString;
 
         drawCompositeImage(itemName, totalDesc);
-
+        
         document.getElementById('btn_save').disabled = false;
         document.getElementById('btn_copy').disabled = false;
         document.getElementById('btn_print').disabled = false;
         
-        showResult("データ生成完了 (48bytes)", true);
-        
-        // 生成時にも念のため保存しておく（誤ってリロードしたとき用）
-        saveFormData();
+        saveFormData(); // 生成時も保存
     }
 
     function drawCompositeImage(topText, bottomText) {
@@ -291,7 +290,6 @@
         const cellSize = 12; 
         const margin = 20;   
         const qrSize = qr.getModuleCount() * cellSize;
-        
         const fontSize = 32; 
         
         const canvasWidth = Math.max(400, qrSize + margin * 2);
@@ -303,7 +301,6 @@
         const ctx = canvas.getContext('2d');
 
         ctx.imageSmoothingEnabled = false;
-
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -326,7 +323,6 @@
             }
         }
 
-        ctx.fillStyle = '#000000';
         const priceTop = qrTop + qrSize + margin + fontSize / 2;
         ctx.fillText(bottomText, canvasWidth / 2, priceTop);
 
@@ -344,7 +340,6 @@
         
         const itemCode = document.getElementById('item_code').value || '0000';
         const itemName = document.getElementById('item_name').value || 'item';
-
         const safeItemName = itemName.replace(/[\\/:*?"<>|]/g, '_');
         const filename = itemCode + '_' + safeItemName + '.png';
 
@@ -359,17 +354,16 @@
     function copyToClipboard() {
         if (!currentDisplayString) return;
         navigator.clipboard.writeText(currentDisplayString).then(function() {
-            showResult("データをコピーしました", true);
+            alert("クリップボードにコピーしました");
         }, function(err) {
-            showResult("コピーに失敗しました", false);
+            alert("コピーに失敗しました");
         });
     }
 
     function sendPrintRequest() {
         if (!currentDisplayString) return;
 
-        // ★ここでフォームの状態を保存する
-        saveFormData();
+        saveFormData(); // 送信前に状態保存
 
         const scheme = "brotherwebprint://print";
         const filename = document.getElementById("input_printfile").value;
@@ -377,12 +371,12 @@
         const copies = document.getElementById("input_quantity").value;
         const text1 = document.getElementById("item_name").value;
         const text2 = document.getElementById("price_display").value;
-        
         const qrCodeData = currentDisplayString; 
 
-        const baseUrl = window.location.href.split('?')[0];
-        const successURL = encodeURIComponent(baseUrl + '?result=success');
-        const failureURL = encodeURIComponent(baseUrl + '?result=fail');
+        // ★修正点：? ではなく # を使用してリロードを防ぐ
+        const baseUrl = window.location.href.split('#')[0].split('?')[0];
+        const successURL = encodeURIComponent(baseUrl + '#result_success');
+        const failureURL = encodeURIComponent(baseUrl + '#result_fail');
 
         const url = scheme + '?' +
             'filename=' + encodeURIComponent(filename) + '&' +
@@ -395,12 +389,6 @@
             'failureCallback=' + failureURL;
 
         location.href = url;
-    }
-
-    function showResult(msg, isSuccess) {
-        const el = document.getElementById('result_message');
-        el.innerText = msg;
-        el.className = isSuccess ? 'success' : 'error';
     }
 </script>
 </body>
