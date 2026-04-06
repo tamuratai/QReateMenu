@@ -1,0 +1,802 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QReateMenu</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+<style>
+    body { font-family: "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; color: #333; }
+    h2 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }
+    .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
+    .radio-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .tax-rate-button { min-width: 72px; padding: 10px 14px; border: 1px solid #0056b3; border-radius: 999px; background: #fff; color: #0056b3; cursor: pointer; font-weight: bold; }
+    .tax-rate-button.active { background: #0056b3; color: #fff; }
+    .field-note { margin-top: 4px; font-size: 12px; color: #666; }
+    .calculated-field { background-color: #e9ecef; color: #495057; }
+    .price-display-field { font-size: 20px; font-weight: bold; color: #212529; }
+    .invalid-field { border-color: #dc3545 !important; background-color: #fff5f5; }
+    .warning-message { margin-top: 8px; color: #dc3545; font-size: 12px; font-weight: bold; }
+    hr { margin: 20px 0; border: 0; border-top: 1px solid #ddd; }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    button { flex: 1; min-width: 140px; padding: 12px; font-size: 16px; border: none; border-radius: 4px; cursor: pointer; color: #fff; font-weight: bold; }
+    button:disabled { background-color: #ccc; cursor: not-allowed; }
+    .btn-generate { background-color: #28a745; }
+    .btn-save { background-color: #17a2b8; }
+    .btn-print { background-color: #007bff; }
+    .btn-copy { background-color: #6c757d; }
+    
+    #qr_display_area { 
+        text-align: center; 
+        margin-top: 20px; 
+        padding: 10px; 
+        min-height: 200px; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        border: 1px dashed #ccc; 
+        background: white; 
+    }
+    #qr_display_area img { 
+        max-width: 100%; 
+        height: auto; 
+        box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        image-rendering: pixelated; 
+    }
+    
+    #generated_string { 
+        font-family: monospace; 
+        word-break: break-all; 
+        background: #eee; 
+        padding: 10px; 
+        margin-top: 10px; 
+        font-size: 14px; 
+        border-radius: 4px;
+    }
+    
+    .settings-area { display: none; background: #fff3cd; padding: 10px; margin-bottom: 10px; border: 1px solid #ffeeba; }
+    .settings-toggle { font-size: 12px; color: #856404; cursor: pointer; text-decoration: underline; margin-bottom: 10px; display: inline-block; }
+    .footer-note { margin-top: 24px; font-size: 12px; color: #666; text-align: center; }
+</style>
+</head>
+
+<body>
+<div class="container">
+    <h2>QReateMenu</h2>
+
+    <span class="settings-toggle" onclick="toggleSettings()">▼ プリンタ設定を表示/非表示</span>
+    <div id="settings_area" class="settings-area">
+        <div class="form-group"><label>Template URL (lbx):</label><input type="text" id="input_printfile" value="https://tamuratai.github.io/QreateMenu/AES-CUT_MenuQRcode24mm.lbx"></div>
+        <div class="form-group"><label>Media Size (bin):</label><input type="text" id="input_binfile" value="Width24mm"></div>
+        <div class="form-group"><label>Copies:</label><input type="number" id="input_quantity" value="1"></div>
+    </div>
+
+    <div class="form-group">
+        <label>店舗番号 (4桁)</label>
+        <input type="text" id="store_code" maxlength="4" inputmode="numeric" placeholder="例: 1234" oninput="sanitizeNumericInput(this); updateGenerateButtonState()">
+    </div>
+    <div class="form-group">
+        <label>商品コード (4桁)</label>
+        <input type="text" id="item_code" maxlength="4" inputmode="numeric" placeholder="例: 0001" oninput="sanitizeNumericInput(this); updateGenerateButtonState()">
+    </div>
+    <div class="form-group">
+        <label>税率 (%)</label>
+        <div class="radio-group">
+            <button type="button" class="tax-rate-button" data-tax-rate="0" onclick="selectTaxRate('0')">0%</button>
+            <button type="button" class="tax-rate-button" data-tax-rate="8" onclick="selectTaxRate('8')">8%</button>
+            <button type="button" class="tax-rate-button active" data-tax-rate="10" onclick="selectTaxRate('10')">10%</button>
+        </div>
+        <input type="hidden" id="tax_rate" value="10">
+    </div>
+    <div class="form-group">
+        <label>品名</label>
+        <input type="text" id="item_name" maxlength="20" placeholder="例: ﾐｿﾗｰﾒﾝ">
+        <div class="field-note">全角の英数字・カナ・ひらがなは、入力時に半角へ変換されます<br>※その他の全角文字は削除されます（20文字以内）<br>※濁点・半濁点は1文字としてカウントします</div>
+    </div>
+    <div class="form-group">
+        <label>税抜き価格</label>
+        <input type="text" id="price_ex_tax" inputmode="numeric" placeholder="例: 900" oninput="handlePriceInput(this)">
+    </div>
+    <div class="form-group">
+        <label>税額</label>
+        <input type="text" id="tax_amount_display" inputmode="numeric" placeholder="例: 90" oninput="handleTaxAmountInput(this)">
+    </div>
+    <div class="form-group">
+        <label>税込価格</label>
+        <input type="text" id="price_display" class="calculated-field price-display-field" readonly>
+        <input type="hidden" id="price_display_raw">
+        <div id="pricing_warning" class="warning-message"></div>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-generate" id="btn_generate" onclick="generateMenuData()" disabled>QR生成</button>
+        <button class="btn-save" id="btn_save" onclick="saveQRImage()" disabled>QR画像保存 (PNG)</button>
+        <button class="btn-copy" id="btn_copy" onclick="copyToClipboard()" disabled>文字列コピー</button>
+        <button class="btn-print" id="btn_print" onclick="sendPrintRequest()" disabled>QR印刷</button>
+    </div>
+
+    <div id="qr_display_area"><span style="color:#ccc;">QRコードがここに表示されます</span></div>
+    
+    <label style="font-size:12px; font-weight:bold; margin-top:10px; display:block;">生成データ (48byte):</label>
+    <div id="generated_string">データ未生成</div>
+    <div class="footer-note">※QRコードは株式会社デンソーウェーブの登録商標です</div>
+</div>
+
+<script type="text/javascript">
+    let taxAutoMode = true;
+
+    // --- 初期化処理 ---
+    window.onload = function() {
+        taxAutoMode = document.getElementById('tax_rate').value !== '';
+        setupItemNameInput();
+        restoreFormData(); // バックグラウンドでリロードされた場合のために復元
+        calculatePreview(taxAutoMode);
+        updatePrintButtonState();
+    };
+
+    // --- フォームデータの保存・復元 ---
+    // ※アプリ連携時にバックグラウンドのタブがOSによってメモリ解放されるリスクへの対策
+    function saveFormData() {
+        const data = {
+            store_code: document.getElementById('store_code').value,
+            item_code: document.getElementById('item_code').value,
+            tax_rate: document.getElementById('tax_rate').value,
+            item_name: document.getElementById('item_name').value,
+            price_ex_tax: document.getElementById('price_ex_tax').value,
+            tax_amount_display: document.getElementById('tax_amount_display').value,
+            tax_auto_mode: taxAutoMode ? '1' : '0',
+            input_printfile: document.getElementById('input_printfile').value,
+            input_binfile: document.getElementById('input_binfile').value,
+            input_quantity: document.getElementById('input_quantity').value
+        };
+        localStorage.setItem('menu_qr_form_data', JSON.stringify(data));
+    }
+
+    function isMobileBrowser() {
+        return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    }
+
+    function isWindowsDesktopBrowser() {
+        const agent = navigator.userAgent || '';
+        const isWindows = /Windows/i.test(agent);
+        const isEdge = /Edg/i.test(agent);
+        const isChrome = /Chrome/i.test(agent) && !/Edg|OPR/i.test(agent);
+        return isWindows && !isMobileBrowser() && (isEdge || isChrome);
+    }
+
+    function updatePrintButtonState() {
+        const btnPrint = document.getElementById('btn_print');
+        if (!btnPrint) return;
+        btnPrint.disabled = !currentDisplayString || !(isMobileBrowser() || isWindowsDesktopBrowser());
+    }
+
+    function restoreFormData() {
+        const saved = localStorage.getItem('menu_qr_form_data');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                if(data.store_code) {
+                    document.getElementById('store_code').value = data.store_code;
+                    sanitizeNumericInput(document.getElementById('store_code'));
+                }
+                if(data.item_code) {
+                    document.getElementById('item_code').value = data.item_code;
+                    sanitizeNumericInput(document.getElementById('item_code'));
+                }
+                if (data.tax_rate && data.tax_auto_mode !== '0') {
+                    selectTaxRate(data.tax_rate);
+                } else {
+                    clearTaxRateSelection();
+                }
+                if(data.item_name) {
+                    document.getElementById('item_name').value = data.item_name;
+                    sanitizeItemName(document.getElementById('item_name'));
+                }
+                if(data.price_ex_tax) {
+                    document.getElementById('price_ex_tax').value = data.price_ex_tax;
+                    sanitizeNumericInput(document.getElementById('price_ex_tax'));
+                }
+                if(data.tax_amount_display) {
+                    document.getElementById('tax_amount_display').value = data.tax_amount_display;
+                    sanitizeNumericInput(document.getElementById('tax_amount_display'));
+                }
+                if(data.input_printfile) document.getElementById('input_printfile').value = data.input_printfile;
+                if(data.input_binfile) document.getElementById('input_binfile').value = data.input_binfile;
+                if(data.input_quantity) document.getElementById('input_quantity').value = data.input_quantity;
+            } catch (e) {
+                console.error("Failed to restore form data", e);
+            }
+        }
+    }
+
+    // --- 既存ロジック ---
+
+    function toggleSettings() {
+        const area = document.getElementById('settings_area');
+        area.style.display = area.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function incrementItemCode() {
+        const itemCodeInput = document.getElementById('item_code');
+        const currentValue = itemCodeInput.value;
+        if (!/^\d{4}$/.test(currentValue)) {
+            return;
+        }
+
+        const nextValue = currentValue === '9999'
+            ? '0001'
+            : String(parseInt(currentValue, 10) + 1).padStart(4, '0');
+
+        itemCodeInput.value = nextValue;
+    }
+
+    function sanitizeNumericInput(input) {
+        input.value = input.value.replace(/\D/g, '');
+    }
+
+    function handlePriceInput(input) {
+        sanitizeNumericInput(input);
+        calculatePreview(taxAutoMode);
+    }
+
+    function handleTaxAmountInput(input) {
+        sanitizeNumericInput(input);
+        clearTaxRateSelection();
+        calculatePreview(false);
+    }
+
+    function normalizeFullWidthAlnum(str) {
+        return str.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+            return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+        });
+    }
+
+    function normalizeFullWidthKana(str) {
+        const kanaMap = {
+            '。': '｡', '「': '｢', '」': '｣', '、': '､', '・': '･', 'ー': 'ｰ',
+            'ァ': 'ｧ', 'ィ': 'ｨ', 'ゥ': 'ｩ', 'ェ': 'ｪ', 'ォ': 'ｫ', 'ッ': 'ｯ', 'ャ': 'ｬ', 'ュ': 'ｭ', 'ョ': 'ｮ',
+            'ア': 'ｱ', 'イ': 'ｲ', 'ウ': 'ｳ', 'エ': 'ｴ', 'オ': 'ｵ',
+            'カ': 'ｶ', 'キ': 'ｷ', 'ク': 'ｸ', 'ケ': 'ｹ', 'コ': 'ｺ',
+            'サ': 'ｻ', 'シ': 'ｼ', 'ス': 'ｽ', 'セ': 'ｾ', 'ソ': 'ｿ',
+            'タ': 'ﾀ', 'チ': 'ﾁ', 'ツ': 'ﾂ', 'テ': 'ﾃ', 'ト': 'ﾄ',
+            'ナ': 'ﾅ', 'ニ': 'ﾆ', 'ヌ': 'ﾇ', 'ネ': 'ﾈ', 'ノ': 'ﾉ',
+            'ハ': 'ﾊ', 'ヒ': 'ﾋ', 'フ': 'ﾌ', 'ヘ': 'ﾍ', 'ホ': 'ﾎ',
+            'マ': 'ﾏ', 'ミ': 'ﾐ', 'ム': 'ﾑ', 'メ': 'ﾒ', 'モ': 'ﾓ',
+            'ヤ': 'ﾔ', 'ユ': 'ﾕ', 'ヨ': 'ﾖ',
+            'ラ': 'ﾗ', 'リ': 'ﾘ', 'ル': 'ﾙ', 'レ': 'ﾚ', 'ロ': 'ﾛ',
+            'ワ': 'ﾜ', 'ヲ': 'ｦ', 'ン': 'ﾝ',
+            'ガ': 'ｶﾞ', 'ギ': 'ｷﾞ', 'グ': 'ｸﾞ', 'ゲ': 'ｹﾞ', 'ゴ': 'ｺﾞ',
+            'ザ': 'ｻﾞ', 'ジ': 'ｼﾞ', 'ズ': 'ｽﾞ', 'ゼ': 'ｾﾞ', 'ゾ': 'ｿﾞ',
+            'ダ': 'ﾀﾞ', 'ヂ': 'ﾁﾞ', 'ヅ': 'ﾂﾞ', 'デ': 'ﾃﾞ', 'ド': 'ﾄﾞ',
+            'バ': 'ﾊﾞ', 'ビ': 'ﾋﾞ', 'ブ': 'ﾌﾞ', 'ベ': 'ﾍﾞ', 'ボ': 'ﾎﾞ',
+            'パ': 'ﾊﾟ', 'ピ': 'ﾋﾟ', 'プ': 'ﾌﾟ', 'ペ': 'ﾍﾟ', 'ポ': 'ﾎﾟ',
+            'ヴ': 'ｳﾞ'
+        };
+
+        return str.replace(/[。、「」、・ーァィゥェォッャュョアイウエオカ-コサ-ソタ-トナ-ノハ-ホマ-モヤユヨラ-ロワヲンガ-ゴザ-ゾダ-ドバ-ボパ-ポヴ]/g, function(char) {
+            return kanaMap[char] || '';
+        });
+    }
+
+    function normalizeHiraganaToKatakana(str) {
+        return str.replace(/[ぁ-ゖ]/g, function(char) {
+            return String.fromCharCode(char.charCodeAt(0) + 0x60);
+        }).replace(/ゝ/g, 'ヽ')
+          .replace(/ゞ/g, 'ヾ')
+          .replace(/ゕ/g, 'ヵ')
+          .replace(/ゖ/g, 'ヶ');
+    }
+
+    function normalizeItemNameValue(value) {
+        return normalizeFullWidthKana(normalizeHiraganaToKatakana(normalizeFullWidthAlnum(value)))
+            .replace(/[^0-9A-Za-z\uFF66-\uFF9F]/g, '')
+            .slice(0, 20);
+    }
+
+    function sanitizeItemName(input) {
+        input.value = normalizeItemNameValue(input.value);
+    }
+
+    function setupItemNameInput() {
+        const itemNameInput = document.getElementById('item_name');
+        if (!itemNameInput) return;
+
+        itemNameInput.addEventListener('compositionstart', function() {
+            itemNameInput.dataset.isComposing = 'true';
+        });
+
+        itemNameInput.addEventListener('compositionend', function() {
+            itemNameInput.dataset.isComposing = 'false';
+            sanitizeItemName(itemNameInput);
+            updateGenerateButtonState();
+        });
+
+        itemNameInput.addEventListener('input', function(event) {
+            if (event.isComposing || itemNameInput.dataset.isComposing === 'true') {
+                return;
+            }
+            sanitizeItemName(itemNameInput);
+            updateGenerateButtonState();
+        });
+    }
+
+    function getNumericFieldValue(id) {
+        const value = document.getElementById(id).value;
+        return /^\d+$/.test(value) ? parseInt(value, 10) : 0;
+    }
+
+    function formatNumberWithComma(value) {
+        return Number(value).toLocaleString('ja-JP');
+    }
+
+    function formatTotalPriceDisplay(value) {
+        return formatNumberWithComma(value) + '円';
+    }
+
+    function formatTotalPriceLabel(value) {
+        return formatNumberWithComma(value) + '円(税込)';
+    }
+
+    function setTaxRateButtonState(selectedRate) {
+        document.querySelectorAll('.tax-rate-button').forEach(function(button) {
+            button.classList.toggle('active', button.dataset.taxRate === selectedRate);
+        });
+    }
+
+    function clearTaxRateSelection() {
+        taxAutoMode = false;
+        document.getElementById('tax_rate').value = '';
+        setTaxRateButtonState('');
+    }
+
+    function selectTaxRate(value) {
+        const normalized = ['0', '8', '10'].includes(String(value)) ? String(value) : '';
+        if (!normalized) {
+            clearTaxRateSelection();
+            calculatePreview(false);
+            return;
+        }
+
+        taxAutoMode = true;
+        document.getElementById('tax_rate').value = normalized;
+        setTaxRateButtonState(normalized);
+        calculatePreview(true);
+    }
+
+    function getCalculatedTaxAmount(price, rate) {
+        return Math.floor(price * (rate / 100));
+    }
+
+    function getEffectiveTaxRate(price, taxAmt, selectedRate) {
+        if (taxAmt === getCalculatedTaxAmount(price, 0)) return '0';
+        if (taxAmt === getCalculatedTaxAmount(price, 8)) return '8';
+        if (taxAmt === getCalculatedTaxAmount(price, 10)) return '10';
+        return selectedRate;
+    }
+
+    function getPriceValidationState() {
+        const priceRaw = document.getElementById('price_ex_tax').value;
+        const taxRaw = document.getElementById('tax_amount_display').value;
+        const totalRaw = document.getElementById('price_display_raw').value;
+        const price = /^\d+$/.test(priceRaw) ? parseInt(priceRaw, 10) : NaN;
+        const tax = /^\d+$/.test(taxRaw) ? parseInt(taxRaw, 10) : NaN;
+        const total = /^\d+$/.test(totalRaw) ? parseInt(totalRaw, 10) : NaN;
+
+        if (!priceRaw || !taxRaw || !totalRaw || Number.isNaN(price) || Number.isNaN(tax) || Number.isNaN(total)) {
+            return { isValid: false, hasWarning: false, message: '' };
+        }
+
+        if (total > 99990) {
+            return {
+                isValid: false,
+                hasWarning: true,
+                message: '請求金額(税込)は10万円以下で入力してください。'
+            };
+        }
+
+        if (total === 0) {
+            return { isValid: true, hasWarning: false, message: '' };
+        }
+
+        if (total < 10 || total % 10 !== 0) {
+            return {
+                isValid: false,
+                hasWarning: true,
+                message: '金額は10円単位で入力してください。1円単位の入力はできません。本体価格もしくは消費税額を変更してください。'
+            };
+        }
+
+        return { isValid: true, hasWarning: false, message: '' };
+    }
+
+    function updatePricingValidationDisplay() {
+        const validation = getPriceValidationState();
+        const fields = [
+            document.getElementById('price_ex_tax'),
+            document.getElementById('tax_amount_display'),
+            document.getElementById('price_display')
+        ];
+        fields.forEach(function(field) {
+            field.classList.toggle('invalid-field', validation.hasWarning);
+        });
+        document.getElementById('pricing_warning').innerText = validation.message;
+        return validation;
+    }
+
+    function updateGenerateButtonState() {
+        const btnGenerate = document.getElementById('btn_generate');
+        if (!btnGenerate) return;
+        btnGenerate.disabled = !isFormValid();
+    }
+
+    function isFormValid() {
+        const storeCode = document.getElementById('store_code').value;
+        const itemCode = document.getElementById('item_code').value;
+        const itemNameInput = document.getElementById('item_name');
+        itemNameInput.value = normalizeItemNameValue(itemNameInput.value);
+        const itemName = itemNameInput.value;
+        const pricingValidation = getPriceValidationState();
+
+        return /^\d{4}$/.test(storeCode) &&
+            /^\d{4}$/.test(itemCode) &&
+            /^[0-9A-Za-z\uFF66-\uFF9F]{1,20}$/.test(itemName) &&
+            pricingValidation.isValid;
+    }
+
+    function validateFormInputs() {
+        const storeCode = document.getElementById('store_code').value;
+        const itemCode = document.getElementById('item_code').value;
+        const itemNameInput = document.getElementById('item_name');
+        itemNameInput.value = normalizeItemNameValue(itemNameInput.value);
+        const itemName = itemNameInput.value;
+        const pricingValidation = updatePricingValidationDisplay();
+
+        if (!/^\d{4}$/.test(storeCode)) {
+            alert("店舗番号は半角数字4桁で入力してください");
+            return false;
+        }
+        if (!/^\d{4}$/.test(itemCode)) {
+            alert("商品コードは半角数字4桁で入力してください");
+            return false;
+        }
+        if (!/^[0-9A-Za-z\uFF66-\uFF9F]{1,20}$/.test(itemName)) {
+            alert("品名は半角英字・半角数字・半角カタカナに変換可能な文字のみ20文字以内で入力してください");
+            return false;
+        }
+        if (!pricingValidation.isValid) {
+            alert(pricingValidation.message || "税込価格を確認してください");
+            return false;
+        }
+        return true;
+    }
+
+    function calculatePreview(updateTaxFromRate) {
+        const priceInput = document.getElementById('price_ex_tax');
+        const taxInput = document.getElementById('tax_amount_display');
+        const totalInput = document.getElementById('price_display');
+        const totalRawInput = document.getElementById('price_display_raw');
+        const price = getNumericFieldValue('price_ex_tax');
+        const rate = parseInt(document.getElementById('tax_rate').value, 10) || 0;
+        let taxAmt = getNumericFieldValue('tax_amount_display');
+
+        if (updateTaxFromRate) {
+            taxAmt = getCalculatedTaxAmount(price, rate);
+            taxInput.value = String(taxAmt);
+        }
+
+        const total = price + taxAmt;
+
+        if (!priceInput.value && !taxInput.value) {
+            totalInput.value = '';
+            totalRawInput.value = '';
+        } else {
+            totalRawInput.value = String(total);
+            totalInput.value = formatTotalPriceDisplay(total);
+        }
+
+        updatePricingValidationDisplay();
+        updateGenerateButtonState();
+        return { taxAmt, total };
+    }
+
+    function toSjisBytes(str) {
+        return Encoding.convert(Encoding.stringToCode(str), {to: 'SJIS', from: 'UNICODE'});
+    }
+
+    function padBytes(byteArray, targetLength, padByteVal, align) {
+        if (byteArray.length >= targetLength) { return byteArray.slice(0, targetLength); }
+        const diff = targetLength - byteArray.length;
+        const pads = new Array(diff).fill(padByteVal);
+        return align === 'right' ? pads.concat(byteArray) : byteArray.concat(pads);
+    }
+
+    function concatBytes(arrays) {
+        let total = [];
+        arrays.forEach(arr => { total = total.concat(arr); });
+        return total;
+    }
+
+    function bytesToString(bytes) {
+        return Encoding.convert(bytes, {to: 'UNICODE', from: 'SJIS', type: 'string'});
+    }
+
+    let currentSjisBytes = [];
+    let currentDisplayString = "";
+    let currentCanvas = null;
+    let currentPrintedItemName = "";
+    let currentPrintedPriceText = "";
+
+    function generateMenuData() {
+        if (!validateFormInputs()) return;
+
+        const storeCode = document.getElementById('store_code').value;
+        const itemCode = document.getElementById('item_code').value;
+        const selectedTaxRate = document.getElementById('tax_rate').value;
+        const itemName = document.getElementById('item_name').value;
+        const price = document.getElementById('price_ex_tax').value;
+        
+        const calc = calculatePreview();
+        const taxAmt = calc.taxAmt;
+        const totalDesc = formatTotalPriceLabel(calc.total);
+        const numericPrice = parseInt(price, 10) || 0;
+        const taxRate = getEffectiveTaxRate(numericPrice, taxAmt, selectedTaxRate);
+        const isReduced = taxRate === '8';
+
+        const CODE_K = toSjisBytes("K");
+        const COMMA = toSjisBytes(",");
+        const STAR = toSjisBytes("*");
+        const SPACE = toSjisBytes(" ");
+        
+        const b_store = padBytes(toSjisBytes(storeCode), 4, 0x30, 'right');
+        const b_item = padBytes(toSjisBytes(itemCode), 4, 0x30, 'right');
+        const b_rate = padBytes(toSjisBytes(taxRate), 2, 0x30, 'right');
+        const b_reduced = isReduced ? STAR : SPACE;
+        const b_name = padBytes(toSjisBytes(itemName), 20, 0x20, 'left');
+        const b_price = padBytes(toSjisBytes(price), 6, 0x20, 'left');
+        const b_tax = padBytes(toSjisBytes(taxAmt.toString()), 5, 0x20, 'left');
+
+        const fullBytes = concatBytes([
+            CODE_K,
+            b_store, COMMA,
+            b_item, COMMA,
+            b_rate, 
+            b_reduced, COMMA,
+            b_name, COMMA,
+            b_price, COMMA,
+            b_tax
+        ]);
+
+        currentSjisBytes = fullBytes;
+        currentDisplayString = bytesToString(fullBytes);
+        currentPrintedItemName = itemName;
+        currentPrintedPriceText = totalDesc;
+        document.getElementById('generated_string').innerText = currentDisplayString;
+
+        drawCompositeImage(itemName, totalDesc);
+        
+        document.getElementById('btn_save').disabled = false;
+        document.getElementById('btn_copy').disabled = false;
+        incrementItemCode();
+        document.getElementById('price_ex_tax').value = '';
+        document.getElementById('tax_amount_display').value = '';
+        document.getElementById('price_display').value = '';
+        document.getElementById('price_display_raw').value = '';
+        updatePrintButtonState();
+        calculatePreview(false);
+        
+        saveFormData(); // 生成時も保存
+    }
+
+    function drawCompositeImage(topText, bottomText) {
+        let binaryString = "";
+        for (let i = 0; i < currentSjisBytes.length; i++) {
+            binaryString += String.fromCharCode(currentSjisBytes[i]);
+        }
+        
+        const qr = qrcode(0, 'M');
+        qr.addData(binaryString, 'Byte');
+        qr.make();
+        
+        const cellSize = 12; 
+        const margin = 20;   
+        const qrSize = qr.getModuleCount() * cellSize;
+        const fontSize = 32; 
+        
+        const canvasWidth = Math.max(400, qrSize + margin * 2);
+        const canvasHeight = margin + fontSize + margin + qrSize + margin + fontSize + margin;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold ' + fontSize + 'px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.fillText(topText, canvasWidth / 2, margin + fontSize / 2);
+
+        const qrTop = margin + fontSize + margin;
+        const qrLeft = (canvasWidth - qrSize) / 2;
+        
+        for (let r = 0; r < qr.getModuleCount(); r++) {
+            for (let c = 0; c < qr.getModuleCount(); c++) {
+                if (qr.isDark(r, c)) {
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(Math.floor(qrLeft + c * cellSize), Math.floor(qrTop + r * cellSize), cellSize, cellSize);
+                }
+            }
+        }
+
+        const priceTop = qrTop + qrSize + margin + fontSize / 2;
+        ctx.fillText(bottomText, canvasWidth / 2, priceTop);
+
+        const displayArea = document.getElementById('qr_display_area');
+        displayArea.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL('image/png');
+        displayArea.appendChild(img);
+
+        currentCanvas = canvas;
+    }
+
+    function saveQRImage() {
+        if (!currentCanvas) return;
+        
+        const itemCode = document.getElementById('item_code').value || '0000';
+        const itemName = document.getElementById('item_name').value || 'item';
+        const safeItemName = itemName.replace(/[\\/:*?"<>|]/g, '_');
+        const filename = itemCode + '_' + safeItemName + '.png';
+
+        const link = document.createElement('a');
+        link.href = currentCanvas.toDataURL('image/png');
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function copyToClipboard() {
+        if (!currentDisplayString) return;
+        navigator.clipboard.writeText(currentDisplayString).then(function() {
+            alert("クリップボードにコピーしました");
+        }, function(err) {
+            alert("コピーに失敗しました");
+        });
+    }
+
+    async function sendPrintRequest() {
+        if (!currentDisplayString) return;
+
+        saveFormData(); // 送信前に状態保存
+
+        const filename = document.getElementById("input_printfile").value;
+        const size = document.getElementById("input_binfile").value;
+        const copies = parseInt(document.getElementById("input_quantity").value, 10) || 1;
+        const text1 = currentPrintedItemName;
+        const text2 = currentPrintedPriceText;
+        const qrCodeData = currentDisplayString; 
+
+        if (isWindowsDesktopBrowser()) {
+            if (typeof window.printWithBrotherBPac !== 'function') {
+                alert("Brother b-PAC印刷機能の初期化に失敗しました。");
+                return;
+            }
+
+            try {
+                await window.printWithBrotherBPac({
+                    templatePath: filename,
+                    copies: copies,
+                    itemName: text1,
+                    priceText: text2,
+                    qrCodeData: qrCodeData
+                });
+            } catch (error) {
+                alert(error && error.message ? error.message : "PCブラウザでの印刷に失敗しました。");
+            }
+            return;
+        }
+
+        const scheme = "brotherwebprint://print";
+
+        // ★修正点: コールバック先を別ファイル(result.html)にする
+        // index.html と同じ階層にある result.html を絶対URLで指定
+        const currentUrl = window.location.href;
+        // index.htmlを取り除く、またはフォルダ末尾のスラッシュを考慮して result.html を結合
+        const baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1);
+        const resultPage = baseUrl + 'result.html';
+
+        const successURL = encodeURIComponent(resultPage + '?status=success');
+        const failureURL = encodeURIComponent(resultPage + '?status=fail');
+
+        const url = scheme + '?' +
+            'filename=' + encodeURIComponent(filename) + '&' +
+            'size=' + encodeURIComponent(size) + '&' +
+            'copies=' + encodeURIComponent(copies) + '&' +
+            'barcode_QRcode=' + encodeURIComponent(qrCodeData) + '&' +
+            'text_ItemName=' + encodeURIComponent(text1) + '&' +
+            'text_Price=' + encodeURIComponent(text2) + '&' +
+            'successCallback=' + successURL + '&' +
+            'failureCallback=' + failureURL;
+
+        location.href = url;
+    }
+</script>
+<script type="module">
+import * as bpac from './bpac.js';
+
+window.printWithBrotherBPac = async function(params) {
+    const openExtensionStore = function() {
+        const agent = window.navigator.userAgent.toLowerCase();
+        if (agent.indexOf('edg') !== -1) {
+            window.open('https://microsoftedge.microsoft.com/addons/detail/brother-bpac-extension/kmopihekhjobijiipnloimfdgjddbnhg', '_blank');
+        } else if (agent.indexOf('chrome') !== -1 && agent.indexOf('opr') === -1) {
+            window.open('https://chrome.google.com/webstore/detail/ilpghlfadkjifilabejhhijpfphfcfhb', '_blank');
+        }
+    };
+
+    if (bpac.IsExtensionInstalled() === false) {
+        openExtensionStore();
+        throw new Error('Brother b-PAC Extension が見つかりません。拡張機能をインストールしてください。');
+    }
+
+    const printButton = document.getElementById('btn_print');
+    if (printButton) {
+        printButton.disabled = true;
+    }
+
+    try {
+        const objDoc = bpac.IDocument;
+        const opened = await objDoc.Open(params.templatePath);
+        if (opened !== true) {
+            throw new Error('テンプレートファイルを開けませんでした。');
+        }
+
+        const itemNameObject = await objDoc.GetObject('ItemName');
+        if (itemNameObject) {
+            itemNameObject.Text = params.itemName;
+        }
+
+        const priceObject = await objDoc.GetObject('Price');
+        if (priceObject) {
+            priceObject.Text = params.priceText;
+        }
+
+        const barcodeIndex = await objDoc.GetBarcodeIndex('QRcode');
+        if (barcodeIndex === undefined) {
+            throw new Error('QRコードオブジェクト QRcode が見つかりません。');
+        }
+        await objDoc.SetBarcodeData(barcodeIndex, params.qrCodeData);
+
+        await objDoc.StartPrint('', 0);
+        await objDoc.PrintOut(params.copies, 0);
+        await objDoc.EndPrint();
+        await objDoc.Close();
+    } catch (error) {
+        try {
+            await bpac.IDocument.Close();
+        } catch (closeError) {
+        }
+        throw error;
+    } finally {
+        if (typeof window.updatePrintButtonState === 'function') {
+            window.updatePrintButtonState();
+        } else if (printButton) {
+            printButton.disabled = false;
+        }
+    }
+};
+</script>
+</body>
+</html>
