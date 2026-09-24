@@ -61,11 +61,23 @@
     }
     
     .footer-note { margin-top: 24px; font-size: 12px; color: #666; text-align: center; }
+    body:not(.terms-ready) .container { visibility: hidden; }
+    .terms-link { display: inline-block; margin-top: 12px; color: #0056b3; }
+    .terms-overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.55); box-sizing: border-box; }
+    .terms-overlay[hidden] { display: none; }
+    .terms-panel { width: min(100%, 600px); max-height: min(85vh, 760px); overflow-y: auto; box-sizing: border-box; padding: 24px; border-radius: 8px; background: white; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25); }
+    .terms-panel h2 { margin-top: 0; }
+    .terms-panel h3 { margin: 20px 0 6px; font-size: 16px; }
+    .terms-panel p { margin: 0 0 12px; line-height: 1.7; }
+    .terms-actions { display: flex; gap: 10px; margin-top: 22px; }
+    .terms-action { background: #0056b3; }
+    .terms-close { background: #6c757d; }
+    .terms-actions button[hidden] { display: none; }
 </style>
 </head>
 
 <body>
-<div class="container">
+<div class="container" id="app_container" inert>
     <h2>QReateMenu</h2>
 
     <div class="form-group">
@@ -130,10 +142,78 @@
     
     <label style="font-size:12px; font-weight:bold; margin-top:10px; display:block;">生成データ (48byte):</label>
     <div id="generated_string">データ未生成</div>
-    <div class="footer-note">(注)QRコードは株式会社デンソーウェーブの登録商標です</div>
+    <div class="footer-note">
+        (注)QRコードは株式会社デンソーウェーブの登録商標です<br>
+        <a class="terms-link" href="#terms" onclick="showTerms(); return false;">ご利用にあたっての注意事項</a>
+    </div>
+</div>
+
+<div class="terms-overlay" id="terms_overlay" role="dialog" aria-modal="true" aria-labelledby="terms_title">
+    <div class="terms-panel">
+        <h2 id="terms_title">QReateMenu（無料版）ご利用にあたっての注意事項</h2>
+        <p>QReateMenu（無料版）は、AES-CUT用メニューQRコードの作成を支援する無償のサービスです。ご利用前に、以下をご確認ください。</p>
+        <h3>1. 生成内容と運用前の確認</h3>
+        <p>店舗番号、商品コード、品名、価格、税額を確認したうえでQRコードを生成してください。保存した画像や印刷したラベルについても、使用する機器で読み取り、表示内容と精算金額が意図どおりか、運用前に確認してください。</p>
+        <h3>2. 動作と提供について</h3>
+        <p>本サービスに不具合が生じないこと、すべての端末・ブラウザ・プリンターで動作すること、また継続して利用できることを保証するものではありません。機能の変更、提供の一時中断または終了を行う場合があります。</p>
+        <h3>3. 入力データの保存について</h3>
+        <p>入力内容の一部は、お使いのブラウザ内に保存されます。ブラウザの設定変更やデータ消去などにより、保存内容が失われる場合があります。必要なQR画像や入力内容は、利用者ご自身で保存・管理してください。</p>
+        <div class="terms-actions">
+            <button type="button" class="terms-action" id="terms_accept" onclick="acceptTerms()">上記を確認して利用を開始する</button>
+            <button type="button" class="terms-close" id="terms_close" onclick="closeTerms()" hidden>閉じる</button>
+        </div>
+    </div>
 </div>
 
 <script type="text/javascript">
+    const termsVersion = '1';
+    const termsStorageKey = 'qreate_menu_terms_confirmed_version';
+    let termsReturnFocus = null;
+
+    function initializeTerms() {
+        let confirmed = false;
+        try {
+            confirmed = localStorage.getItem(termsStorageKey) === termsVersion;
+        } catch (error) {
+            // 保存できない環境では、このページを開くたびに確認してもらう。
+        }
+        if (confirmed) {
+            document.getElementById('terms_overlay').hidden = true;
+            document.getElementById('app_container').inert = false;
+            document.body.classList.add('terms-ready');
+        } else {
+            document.getElementById('terms_accept').focus();
+        }
+    }
+
+    function acceptTerms() {
+        try {
+            localStorage.setItem(termsStorageKey, termsVersion);
+        } catch (error) {
+            // 保存できなくても、現在開いているページでは利用できる。
+        }
+        document.getElementById('terms_overlay').hidden = true;
+        document.getElementById('app_container').inert = false;
+        document.body.classList.add('terms-ready');
+    }
+
+    function showTerms() {
+        termsReturnFocus = document.activeElement;
+        document.getElementById('terms_accept').hidden = true;
+        document.getElementById('terms_close').hidden = false;
+        document.getElementById('app_container').inert = true;
+        document.getElementById('terms_overlay').hidden = false;
+        document.getElementById('terms_close').focus();
+    }
+
+    function closeTerms() {
+        document.getElementById('terms_overlay').hidden = true;
+        document.getElementById('app_container').inert = false;
+        if (termsReturnFocus) termsReturnFocus.focus();
+    }
+
+    initializeTerms();
+
     let taxAutoMode = true;
     const tapeWidthSettings = {
         '12': { templateFile: 'AES-CUT_MenuQRcode12mm.lbx', mediaSize: 'Width12mm' },
@@ -546,6 +626,7 @@
     let currentCanvas = null;
     let currentPrintedItemName = "";
     let currentPrintedPriceText = "";
+    let currentGeneratedItemCode = "";
 
     function generateMenuData() {
         if (!validateFormInputs()) return;
@@ -591,6 +672,7 @@
         currentDisplayString = bytesToString(fullBytes);
         currentPrintedItemName = itemName;
         currentPrintedPriceText = totalDesc;
+        currentGeneratedItemCode = itemCode;
         document.getElementById('generated_string').innerText = currentDisplayString;
 
         drawCompositeImage(itemName, totalDesc);
@@ -669,7 +751,7 @@
     function saveQRImage() {
         if (!currentCanvas) return;
         
-        const itemCode = document.getElementById('item_code').value || '0000';
+        const itemCode = currentGeneratedItemCode;
         const itemName = document.getElementById('item_name').value || 'item';
         const safeItemName = itemName.replace(/[\\/:*?"<>|]/g, '_');
         const filename = itemCode + '_' + safeItemName + '.png';
