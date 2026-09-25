@@ -149,8 +149,8 @@
 </div>
 
 <div class="terms-overlay" id="terms_overlay" role="dialog" aria-modal="true" aria-labelledby="terms_title">
-    <div class="terms-panel">
-        <h2 id="terms_title">QReateMenu（無料版）ご利用にあたっての注意事項</h2>
+    <div class="terms-panel" id="terms_panel">
+        <h2 id="terms_title" tabindex="-1">QReateMenu（無料版）ご利用にあたっての注意事項</h2>
         <p>QReateMenu（無料版）は、AES-CUT用メニューQRコードの作成を支援する無償のサービスです。ご利用前に、以下をご確認ください。</p>
         <h3>1. 生成内容と運用前の確認</h3>
         <p>店舗番号、商品コード、品名、価格、税額を確認したうえでQRコードを生成してください。保存した画像や印刷したラベルについても、使用する機器で読み取り、表示内容と精算金額が意図どおりか、運用前に確認してください。</p>
@@ -170,6 +170,12 @@
     const termsStorageKey = 'qreate_menu_terms_confirmed_version';
     let termsReturnFocus = null;
 
+    function focusTermsStart() {
+        const panel = document.getElementById('terms_panel');
+        panel.scrollTop = 0;
+        document.getElementById('terms_title').focus({ preventScroll: true });
+    }
+
     function initializeTerms() {
         let confirmed = false;
         try {
@@ -182,7 +188,7 @@
             document.getElementById('app_container').inert = false;
             document.body.classList.add('terms-ready');
         } else {
-            document.getElementById('terms_accept').focus();
+            focusTermsStart();
         }
     }
 
@@ -203,7 +209,7 @@
         document.getElementById('terms_close').hidden = false;
         document.getElementById('app_container').inert = true;
         document.getElementById('terms_overlay').hidden = false;
-        document.getElementById('terms_close').focus();
+        focusTermsStart();
     }
 
     function closeTerms() {
